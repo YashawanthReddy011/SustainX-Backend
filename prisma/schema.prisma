@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  COMMUNITY
+  ADMIN
+}
+
+enum ActivityStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  NEEDS_INFO
+}
+
+enum ReportStatus {
+  REPORTED
+  UNDER_REVIEW
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum CertificateStatus {
+  ACTIVE
+  REVOKED
+}
+
+model User {
+  id             String                 @id @default(cuid()) @map("_id")
+  name           String
+  email          String                 @unique
+  passwordHash   String
+  role           Role                   @default(STUDENT)
+  impactPoints   Int                    @default(0)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  activities     Activity[]
+  projects       Project[]
+  reports        CommunityReport[]
+  certificates   Certificate[]
+  teams          TeamMember[]
+  challengeJoins ChallengeParticipant[]
+}
+
+model Sdg {
+  id           Int                 @id @map("_id")
+  name         String
+  shortName    String
+  description  String
+  color        String
+  activities   Activity[]
+  projects     Project[]
+  challenges   Challenge[]
+  reports      CommunityReport[]
+}
+
+model Challenge {
+  id           String                @id @default(cuid()) @map("_id")
+  title        String
+  description  String
+  target       Int
+  progress     Int                   @default(0)
+  startDate    DateTime
+  endDate      DateTime
+  sdgId        Int
+  createdAt    DateTime              @default(now())
+  sdg          Sdg                   @relation(fields: [sdgId], references: [id])
+  activities   Activity[]
+  participants ChallengeParticipant[]
+}
+
+model ChallengeParticipant {
+  id          String    @id @default(cuid()) @map("_id")
+  userId      String
+  challengeId String
+  joinedAt    DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+
+  @@unique([userId, challengeId])
+}
+
+model Activity {
+  id          String         @id @default(cuid()) @map("_id")
+  title       String
+  description String
+  location    String
+  evidenceUrl String?
+  quantity    Int            @default(1)
+  status      ActivityStatus @default(PENDING)
+  points      Int            @default(0)
+  userId      String
+  sdgId       Int
+  challengeId String?
+  createdAt   DateTime       @default(now())
+  reviewedAt  DateTime?
+  reviewNote  String?
+  user        User           @relation(fields: [userId], references: [id])
+  sdg         Sdg            @relation(fields: [sdgId], references: [id])
+  challenge   Challenge?     @relation(fields: [challengeId], references: [id])
+
+  @@index([status])
+  @@index([userId])
+}
+
+model Project {
+  id          String    @id @default(cuid()) @map("_id")
+  title       String
+  description String
+  category    String
+  location    String
+  startDate   DateTime
+  endDate     DateTime?
+  imageUrl    String?
+  userId      String
+  sdgId       Int
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  sdg         Sdg       @relation(fields: [sdgId], references: [id])
+}
+
+model CommunityReport {
+  id          String       @id @default(cuid()) @map("_id")
+  title       String
+  description String
+  location    String
+  latitude    Float?
+  longitude   Float?
+  imageUrl    String?
+  status      ReportStatus @default(REPORTED)
+  userId      String
+  sdgId       Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id])
+  sdg         Sdg          @relation(fields: [sdgId], references: [id])
+}
+
+model Tree {
+  id        String   @id @default(cuid()) @map("_id")
+  species   String
+  location  String
+  latitude  Float?
+  longitude Float?
+  plantedAt DateTime
+  plantedBy String
+  photoUrl  String?
+  status    String   @default("GROWING")
+  createdAt DateTime @default(now())
+}
+
+model BiodiversityRecord {
+  id         String   @id @default(cuid()) @map("_id")
+  species    String
+  category   String
+  location   String
+  observedAt DateTime
+  photoUrl   String?
+  notes      String?
+  createdAt  DateTime @default(now())
+}
+
+model Certificate {
+  id            String            @id @default(cuid()) @map("_id")
+  certificateNo String            @unique
+  title         String
+  activityId    String?
+  userId        String
+  sdgId         Int
+  issuedAt      DateTime          @default(now())
+  status        CertificateStatus @default(ACTIVE)
+  user          User              @relation(fields: [userId], references: [id])
+}
+
+model Team {
+  id        String       @id @default(cuid()) @map("_id")
+  name      String
+  createdAt DateTime     @default(now())
+  members   TeamMember[]
+}
+
+model TeamMember {
+  id     String @id @default(cuid()) @map("_id")
+  teamId String
+  userId String
+  team   Team   @relation(fields: [teamId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+}
+
+model Notification {
+  id        String   @id @default(cuid()) @map("_id")
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Media {
+  id        String   @id @default(cuid()) @map("_id")
+  url       String
+  publicId  String?
+  fileName  String
+  mimeType  String
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid()) @map("_id")
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  String?
+  createdAt DateTime @default(now())
+}

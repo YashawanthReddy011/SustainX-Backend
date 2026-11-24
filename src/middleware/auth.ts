@@ -48,6 +48,22 @@ export function auth(
   }
 }
 
+export function optionalAuth(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    try {
+      req.user = verifyToken(header.slice(7));
+    } catch {
+      // Public listing endpoints remain usable when a stale token is present.
+    }
+  }
+  next();
+}
+
 export function requireRole(
   ...roles: Array<"STUDENT" | "COMMUNITY" | "ADMIN">
 ) {

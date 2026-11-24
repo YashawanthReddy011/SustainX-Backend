@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import type { UploadApiResponse } from "cloudinary";
 
-import { prisma } from "../config/db";
+import { getCollection, toApiDocument } from "../config/db";
+import { randomUUID } from "node:crypto";
 import { cloudinary } from "../config/cloudinary";
 
 function uploadImage(buffer: Buffer): Promise<UploadApiResponse> {
@@ -41,14 +42,16 @@ export async function uploadMedia(
 	let uploaded: UploadApiResponse | undefined;
 	try {
 		uploaded = await uploadImage(req.file.buffer);
-		const media = await prisma.media.create({
-			data: {
-				url: uploaded.secure_url,
-				publicId: uploaded.public_id,
-				fileName: req.file.originalname,
-				mimeType: req.file.mimetype,
-			},
-		});
+		const document = {
+			_id: randomUUID(),
+			url: uploaded.secure_url,
+			publicId: uploaded.public_id,
+			fileName: req.file.originalname,
+			mimeType: req.file.mimetype,
+			createdAt: new Date(),
+		};
+		await (await getCollection("Media")).insertOne(document);
+		const media = toApiDocument(document);
 
 		return res.status(201).json({ media });
 	} catch (error) {

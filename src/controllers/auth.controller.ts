@@ -3,20 +3,17 @@ import {
   Response,
 } from "express";
 
-import { prisma } from "../config/db";
+import { getCollection, toApiDocument } from "../config/db";
 import { signToken } from "../utils/jwt";
 
 export async function login(
   req: Request,
   res: Response
 ) {
-  const { email } = req.body;
+  const email = String(req.body.email).trim().toLowerCase();
 
-  const user = await prisma.user.findUnique({
-    where: {
-      email,
-    },
-  });
+  const users = await getCollection("User");
+  const user = await users.findOne({ email });
 
   if (!user) {
     return res
@@ -27,14 +24,14 @@ export async function login(
   }
 
   const token = signToken({
-    id: user.id,
+    id: String(user._id),
     role: user.role,
   });
 
   res.json({
     token,
     user: {
-      id: user.id,
+      id: String(user._id),
       name: user.name,
       email: user.email,
       role: user.role,
@@ -47,18 +44,11 @@ export async function me(
   req: Request,
   res: Response
 ) {
-  const user = await prisma.user.findUnique({
-    where: {
-      id: req.user!.id,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      impactPoints: true,
-    },
-  });
+  const users = await getCollection("User");
+  const user = await users.findOne(
+    { _id: req.user!.id },
+    { projection: { name: 1, email: 1, role: 1, impactPoints: 1 } }
+  );
 
-  res.json(user);
+  res.json(user ? toApiDocument(user) : null);
 }

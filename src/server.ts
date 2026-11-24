@@ -8,7 +8,10 @@ import activityRoutes from "./routes/activity.routes";
 import authRoutes from "./routes/auth.routes";
 import mediaRoutes from "./routes/media.routes";
 import sdgRoutes from "./routes/sdg.routes";
+import platformRoutes from "./routes/platform.routes";
+import { challenges, projects, reports } from "./routes/community.routes";
 import { errorHandler } from "./middleware/error";
+import { closeMongoDB, connectToMongoDB } from "./config/db";
 
 const app = express();
 
@@ -29,9 +32,31 @@ app.use("/api/auth", authRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/sdgs", sdgRoutes);
 app.use("/api/activities", activityRoutes);
+app.use("/api/challenges", challenges);
+app.use("/api/projects", projects);
+app.use("/api/reports", reports);
+app.use("/api", platformRoutes);
 
 app.use(errorHandler);
 
-app.listen(env.port, () => {
-  console.log(`SustainX API running on http://localhost:${env.port}`);
+async function start() {
+  await connectToMongoDB();
+  const server = app.listen(env.port, () => {
+    console.log(`SustainX API running on http://localhost:${env.port}`);
+  });
+
+  const shutdown = () => {
+    server.close(async () => {
+      await closeMongoDB();
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+start().catch((error) => {
+  console.error("Failed to start SustainX API:", error);
+  process.exit(1);
 });

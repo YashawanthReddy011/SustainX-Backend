@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { auth } from "../middleware/auth";
+import { auth, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import {
   createActivity,
   listActivities,
   myActivities,
 } from "../controllers/activity.controller";
+import { reviewActivity } from "../controllers/platform.controller";
 
 const router = Router();
 
@@ -19,6 +20,14 @@ const schema = z.object({
   quantity: z.number().int().positive(),
   sdgId: z.number().int().min(1).max(17),
   challengeId: z.string().optional(),
+  category: z.string().max(80).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+});
+
+const reviewSchema = z.object({
+  status: z.enum(["VERIFIED", "REJECTED"]),
+  reviewNote: z.string().max(1000).optional(),
 });
 
 router.get("/", listActivities);
@@ -26,5 +35,6 @@ router.get("/", listActivities);
 router.get("/mine", auth, myActivities);
 
 router.post("/", auth, validate(schema), createActivity);
+router.patch("/:id/review", auth, requireRole("ADMIN"), validate(reviewSchema), reviewActivity);
 
 export default router;

@@ -8,11 +8,13 @@ import {
 import { auth, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { z } from "zod";
+import { sdgProgress } from "../controllers/apiV1.controller";
 
 const router = Router();
 
 router.get("/", listSdgs);
 
+router.get("/:id/progress", sdgProgress);
 router.get("/:id", getSdg);
 router.patch("/:id", auth, requireRole("ADMIN"), validate(z.object({
   title: z.string().min(3).max(120).optional(),

@@ -3,6 +3,7 @@ import {
   Request,
   Response,
 } from "express";
+import { logger } from "../utils/logger";
 
 export function errorHandler(
   error: unknown,
@@ -10,7 +11,12 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ) {
-  console.error(error);
+  logger.error("Unhandled API error", {
+    requestId: _req.requestId,
+    method: _req.method,
+    path: _req.originalUrl,
+    ...logger.formatError(error),
+  });
 
   if (res.headersSent) {
     return;

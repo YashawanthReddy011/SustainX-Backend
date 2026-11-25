@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { auth, requireRole } from "../middleware/auth";
+import { auth, optionalAuth, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import {
   createActivity,
@@ -9,6 +9,7 @@ import {
   myActivities,
 } from "../controllers/activity.controller";
 import { reviewActivity } from "../controllers/platform.controller";
+import { getActivityById } from "../controllers/apiV1.controller";
 
 const router = Router();
 
@@ -23,6 +24,7 @@ const schema = z.object({
   category: z.string().max(80).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
+  projectId: z.string().optional(),
 });
 
 const reviewSchema = z.object({
@@ -30,9 +32,10 @@ const reviewSchema = z.object({
   reviewNote: z.string().max(1000).optional(),
 });
 
-router.get("/", listActivities);
+router.get("/", optionalAuth, listActivities);
 
 router.get("/mine", auth, myActivities);
+router.get("/:id", auth, getActivityById);
 
 router.post("/", auth, validate(schema), createActivity);
 router.patch("/:id/review", auth, requireRole("ADMIN"), validate(reviewSchema), reviewActivity);

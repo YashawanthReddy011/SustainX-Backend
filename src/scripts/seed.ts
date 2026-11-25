@@ -1,5 +1,7 @@
 import { closeMongoDB, connectToMongoDB, getCollection } from "../config/db";
 import { sdgs } from "../data/sdgs";
+import { ensureAuthIndexes } from "../middleware/auth";
+import { hashPassword } from "../utils/password";
 
 const sdgDetails: Record<number, { actions: string[]; targets: string[] }> = {
   1: { actions: ["Support local community initiatives", "Create skill development opportunities", "Promote financial awareness"], targets: ["Reduce poverty", "Build social protection", "Improve access to resources"] },
@@ -13,7 +15,17 @@ const sdgDetails: Record<number, { actions: string[]; targets: string[] }> = {
 };
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("The demo seed script cannot run in production.");
+  }
+
+  const demoPassword = process.env.DEMO_ACCOUNT_PASSWORD;
+  if (!demoPassword || demoPassword.length < 12) {
+    throw new Error("Set DEMO_ACCOUNT_PASSWORD (at least 12 characters) in backend/.env before seeding demo accounts.");
+  }
+
   await connectToMongoDB();
+  await ensureAuthIndexes();
   const collection = await getCollection("Sdg");
 
   for (const sdg of sdgs) {
@@ -27,6 +39,9 @@ async function main() {
           color: sdg.color ?? "#0f5132",
           actions: sdgDetails[sdg.id]?.actions ?? ["Learn about this goal", "Plan a local activity", "Share the results with your community"],
           targets: sdgDetails[sdg.id]?.targets ?? ["Build awareness", "Support local action", "Measure progress"],
+          number: sdg.id,
+          isActive: true,
+          category: sdg.id <= 3 ? "People" : sdg.id <= 10 ? "Prosperity" : sdg.id <= 15 ? "Planet" : "Partnership",
         },
       },
       { upsert: true }
@@ -40,33 +55,48 @@ async function main() {
     { _id: "demo-community", name: "Community Team", email: "community@sustainx.local", role: "COMMUNITY" },
   ];
   for (const user of demoUsers) {
+    const passwordHash = await hashPassword(demoPassword);
     await users.updateOne(
       { _id: user._id },
-      { $setOnInsert: { ...user, impactPoints: 0, status: "ACTIVE", createdAt: new Date() } },
+      { $set: { isDemo: true }, $setOnInsert: { ...user, passwordHash, emailVerified: true, tokenVersion: 0, impactPoints: 0, status: "ACTIVE", createdAt: new Date() } },
       { upsert: true }
+    );
+    await users.updateOne(
+      { _id: user._id, passwordHash: { $exists: false } },
+      { $set: { passwordHash, emailVerified: true, tokenVersion: 0 } }
     );
   }
 
   const challenges = await getCollection("Challenge");
   const demoChallenges = [
-    { _id: "green-campus-30", title: "30-Day Green Campus", description: "Make your campus greener through daily sustainable actions.", sdgId: 13, points: 500, participants: 128, durationDays: 30 },
-    { _id: "water-saver", title: "Water Saver Challenge", description: "Identify and reduce unnecessary water consumption around you.", sdgId: 6, points: 350, participants: 74, durationDays: 21 },
-    { _id: "plastic-free-week", title: "Plastic-Free Week", description: "Reduce single-use plastic and document your sustainable alternatives.", sdgId: 12, points: 300, participants: 95, durationDays: 7 },
-    { _id: "biodiversity-hunt", title: "Campus Biodiversity Hunt", description: "Observe and document plants, birds and biodiversity in your area.", sdgId: 15, points: 450, participants: 61, durationDays: 14 },
+    { _id: "green-campus-30", title: "30-Day Green Campus", description: "Make your campus greener through daily sustainable actions.", sdgId: 13, points: 500, durationDays: 30 },
+    { _id: "water-saver", title: "Water Saver Challenge", description: "Identify and reduce unnecessary water consumption around you.", sdgId: 6, points: 350, durationDays: 21 },
+    { _id: "plastic-free-week", title: "Plastic-Free Week", description: "Reduce single-use plastic and document your sustainable alternatives.", sdgId: 12, points: 300, durationDays: 7 },
+    { _id: "biodiversity-hunt", title: "Campus Biodiversity Hunt", description: "Observe and document plants, birds and biodiversity in your area.", sdgId: 15, points: 450, durationDays: 14 },
   ];
   for (const challenge of demoChallenges) {
-    await challenges.updateOne({ _id: challenge._id }, { $setOnInsert: { ...challenge, joinedUserIds: [], status: "ACTIVE", createdAt: new Date() } }, { upsert: true });
+    const startDate = new Date();
+    const endDate = new Date(startDate.getTime() + challenge.durationDays * 24 * 60 * 60 * 1000);
+    await challenges.updateOne(
+      { _id: challenge._id },
+      { $set: { isDemo: true }, $setOnInsert: { ...challenge, startDate, endDate, joinedUserIds: [], status: "ACTIVE", createdAt: startDate } },
+      { upsert: true }
+    );
   }
 
   const projects = await getCollection("Project");
   const demoProjects = [
-    { _id: "campus-tree-revival", title: "Campus Tree Revival", description: "A student-led project to restore green spaces through native tree plantation and maintenance.", sdgId: 15, members: 32, progress: 72, ownerName: "Yash Reddy" },
-    { _id: "zero-waste-campus", title: "Zero Waste Campus", description: "Building better waste segregation and awareness systems across campus.", sdgId: 12, members: 24, progress: 58, ownerName: "Eco Club" },
-    { _id: "every-drop-counts", title: "Every Drop Counts", description: "Water conservation awareness and leakage reporting initiative.", sdgId: 6, members: 19, progress: 81, ownerName: "Water Team" },
-    { _id: "climate-learning-lab", title: "Climate Learning Lab", description: "Peer-led workshops that help students understand climate action.", sdgId: 13, members: 41, progress: 64, ownerName: "Green Campus" },
+    { _id: "campus-tree-revival", title: "Campus Tree Revival", description: "A student-led project to restore green spaces through native tree plantation and maintenance.", sdgId: 15, ownerName: "Yash Reddy" },
+    { _id: "zero-waste-campus", title: "Zero Waste Campus", description: "Building better waste segregation and awareness systems across campus.", sdgId: 12, ownerName: "Eco Club" },
+    { _id: "every-drop-counts", title: "Every Drop Counts", description: "Water conservation awareness and leakage reporting initiative.", sdgId: 6, ownerName: "Water Team" },
+    { _id: "climate-learning-lab", title: "Climate Learning Lab", description: "Peer-led workshops that help students understand climate action.", sdgId: 13, ownerName: "Green Campus" },
   ];
   for (const project of demoProjects) {
-    await projects.updateOne({ _id: project._id }, { $setOnInsert: { ...project, ownerId: "demo-student", memberIds: [], status: "ACTIVE", createdAt: new Date() } }, { upsert: true });
+    await projects.updateOne(
+      { _id: project._id },
+      { $set: { isDemo: true }, $setOnInsert: { ...project, ownerId: "demo-student", memberIds: [], status: "ACTIVE", createdAt: new Date() } },
+      { upsert: true }
+    );
   }
 
   const reports = await getCollection("CommunityReport");
@@ -76,7 +106,11 @@ async function main() {
     { _id: "report-street-light", title: "Broken street lighting", description: "The street light near the residential area has stopped working.", category: "Public Safety", location: "Residential Area", status: "RESOLVED" },
   ];
   for (const report of demoReports) {
-    await reports.updateOne({ _id: report._id }, { $setOnInsert: { ...report, createdBy: "demo-community", createdAt: new Date() } }, { upsert: true });
+    await reports.updateOne(
+      { _id: report._id },
+      { $set: { isDemo: true }, $setOnInsert: { ...report, createdBy: "demo-community", createdAt: new Date() } },
+      { upsert: true }
+    );
   }
 
   console.log(`Seeded ${sdgs.length} SDGs, ${demoUsers.length} demo accounts, ${demoChallenges.length} challenges, ${demoProjects.length} projects and ${demoReports.length} community reports.`);

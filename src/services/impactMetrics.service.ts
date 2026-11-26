@@ -1,6 +1,7 @@
 export function publishedProjectFilter() {
 	return {
-		status: { $in: ["ACTIVE", "COMPLETED"] },
+		status: { $in: ["PUBLISHED", "ACTIVE", "COMPLETED"] },
+		visibility: { $ne: "PRIVATE" },
 		isPublished: { $ne: false },
 		deletedAt: { $exists: false },
 		isDeleted: { $ne: true },

@@ -50,6 +50,7 @@ submissions.get("/:id", auth, getActivityById);
 router.use("/submissions", submissions);
 
 const ecoGuard = Router();
+ecoGuard.get("/stats", environmentalSummary);
 ecoGuard.get("/activities", listEnvironmentalActivities);
 ecoGuard.get("/activities/summary", environmentalSummary);
 ecoGuard.get("/summary", environmentalSummary);
@@ -57,10 +58,11 @@ ecoGuard.get("/submissions", auth, listMyEnvironmentalSubmissions);
 ecoGuard.get("/submissions/mine", auth, listMyEnvironmentalSubmissions);
 ecoGuard.post("/submissions", auth, validate(z.object({
 	idempotencyKey: z.string().min(16).max(100),
-	type: z.enum(["TREE_PLANTATION", "WATER_CONSERVATION", "WASTE_REDUCTION", "BIODIVERSITY"]),
+	type: z.enum(["TREE_PLANTATION", "TREE_SURVIVAL", "WATER_CONSERVATION", "RENEWABLE_ENERGY", "WASTE_REDUCTION", "CLIMATE_ACTION", "MARINE_PROTECTION", "BIODIVERSITY"]),
 	title: z.string().trim().min(3).max(120),
 	description: z.string().trim().min(20).max(2000),
 	location: z.string().trim().min(2).max(180),
+	activityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 	quantity: z.number().positive(),
 	measurementMethod: z.string().trim().min(10).max(500).optional(),
 	speciesName: z.string().trim().min(2).max(200).optional(),

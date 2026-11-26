@@ -7,17 +7,24 @@ import { getCollection, toApiDocument } from "../config/db";
 import { recordAdminAction } from "../services/adminAudit.service";
 import { getApiPagination, setApiPaginationTotal } from "../middleware/apiV1";
 
+const categoryByGoal: Record<number, string> = {
+	1: "People", 2: "People", 3: "People", 4: "People", 5: "People",
+	6: "Planet", 7: "Prosperity", 8: "Prosperity", 9: "Prosperity", 10: "Prosperity", 11: "Prosperity",
+	12: "Planet", 13: "Planet", 14: "Planet", 15: "Planet", 16: "Peace", 17: "Partnership",
+};
+
 function sdgToApi(document: Record<string, any>) {
+	const id = Number(document._id);
   return {
-    id: document._id,
-    code: document.shortName ?? `SDG ${document._id}`,
-    title: document.name ?? `Sustainable Development Goal ${document._id}`,
+    id,
+    code: document.shortName ?? `SDG ${id}`,
+    title: document.name ?? `Sustainable Development Goal ${id}`,
     shortDescription: document.description ?? "",
-    description: document.description ?? "",
+    description: document.longDescription ?? document.description ?? "",
     color: document.color,
     actions: document.actions ?? [],
-    targets: document.targets ?? [],
-    category: document.category ?? (document._id <= 3 ? "People" : document._id <= 10 ? "Prosperity" : document._id <= 15 ? "Planet" : "Partnership"),
+    targetCount: Number.isInteger(document.targetCount) ? document.targetCount : undefined,
+    category: document.category ?? categoryByGoal[id],
     isActive: document.isActive !== false,
   };
 }
@@ -26,25 +33,32 @@ export async function listSdgs(req: Request, res: Response) {
   const filter: Record<string, unknown> = {};
   if (typeof req.query.category === "string" && req.query.category !== "All") {
     const categoryRanges: Record<string, { $gte: number; $lte: number }> = {
-      People: { $gte: 1, $lte: 3 },
-      Prosperity: { $gte: 4, $lte: 10 },
-      Planet: { $gte: 11, $lte: 15 },
-      Partnership: { $gte: 16, $lte: 17 },
+      People: { $gte: 1, $lte: 5 },
     };
-    const range = categoryRanges[req.query.category];
-    if (!range) return res.status(400).json({ error: "category is not a supported SDG category." });
-    filter._id = range;
+    const categoryIds: Record<string, number[]> = {
+			Prosperity: [7, 8, 9, 10, 11],
+			Planet: [6, 12, 13, 14, 15],
+			Peace: [16],
+			Partnership: [17],
+		};
+		const range = categoryRanges[req.query.category];
+		const ids = categoryIds[req.query.category];
+		if (range) filter._id = range;
+		else if (ids) filter._id = { $in: ids };
+		else return res.status(400).json({ error: "category is not a supported SDG category." });
   }
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   if (search.length > 100) return res.status(400).json({ error: "search must be 100 characters or fewer." });
   if (search) {
     const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const numericId = Number(search);
-    filter.$or = [
-      { name: { $regex: escaped, $options: "i" } },
-      { description: { $regex: escaped, $options: "i" } },
-      ...(Number.isInteger(numericId) && numericId >= 1 && numericId <= 17 ? [{ _id: numericId }] : []),
-    ];
+		filter.$or = /^\d+$/.test(search) && Number.isInteger(numericId) && numericId >= 1 && numericId <= 17
+			? [{ _id: numericId }]
+			: [
+					{ name: { $regex: escaped, $options: "i" } },
+					{ description: { $regex: escaped, $options: "i" } },
+					{ category: { $regex: escaped, $options: "i" } },
+				];
   }
   const collection = await getCollection("Sdg");
   const pagination = getApiPagination(req);
@@ -56,11 +70,22 @@ export async function listSdgs(req: Request, res: Response) {
   res.json(sdgs.map(sdgToApi));
 }
 
+export async function getSdgStats(_req: Request, res: Response) {
+	const documents = await (await getCollection("Sdg")).find(
+		{ isActive: { $ne: false } },
+		{ projection: { _id: 1, category: 1, targetCount: 1 } },
+	).toArray();
+	const categories = new Set(documents.map((document) => document.category ?? categoryByGoal[Number(document._id)]).filter(Boolean));
+	const totalTargets = documents.reduce((sum, document) => sum + (Number.isInteger(document.targetCount) ? document.targetCount : 0), 0);
+	return res.json({ totalGoals: documents.length, totalPillars: categories.size, totalTargets });
+}
+
 export async function getSdg(
   req: Request,
   res: Response
 ) {
   const id = Number(req.params.id);
+	if (!Number.isInteger(id) || id < 1 || id > 17) return res.status(400).json({ error: "SDG id must be an integer between 1 and 17." });
 
   const sdg = await (await getCollection("Sdg")).findOne({ _id: id });
 
@@ -82,7 +107,6 @@ export async function getSdg(
   res.json({
     ...sdgToApi(sdg),
     isActive: sdg.isActive !== false,
-    category: id <= 3 ? "People" : id <= 10 ? "Prosperity" : id <= 15 ? "Planet" : "Partnership",
     progress: allActivities.length ? Math.round((completed / allActivities.length) * 100) : 0,
     completedActions: completed,
     totalActions: allActivities.length,

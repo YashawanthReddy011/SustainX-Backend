@@ -5,7 +5,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "seed:sdgs": "npm run build && node dist/scripts/seed-sdgs.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -14,10 +14,11 @@ const router = Router();
 
 const submissionSchema = z.object({
   idempotencyKey: z.string().min(16).max(100),
-  type: z.enum(["TREE_PLANTATION", "WATER_CONSERVATION", "WASTE_REDUCTION", "BIODIVERSITY"]),
+  type: z.enum(["TREE_PLANTATION", "TREE_SURVIVAL", "WATER_CONSERVATION", "RENEWABLE_ENERGY", "WASTE_REDUCTION", "CLIMATE_ACTION", "MARINE_PROTECTION", "BIODIVERSITY"]),
   title: z.string().trim().min(3).max(120),
   description: z.string().trim().min(20).max(2000),
   location: z.string().trim().min(2).max(180),
+  activityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   quantity: z.number().positive(),
   measurementMethod: z.string().trim().min(10).max(500).optional(),
   speciesName: z.string().trim().min(2).max(200).optional(),

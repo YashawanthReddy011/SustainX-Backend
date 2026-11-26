@@ -3,15 +3,15 @@ import { sdgs } from "../data/sdgs";
 import { ensureAuthIndexes } from "../middleware/auth";
 import { hashPassword } from "../utils/password";
 
-const sdgDetails: Record<number, { actions: string[]; targets: string[] }> = {
-  1: { actions: ["Support local community initiatives", "Create skill development opportunities", "Promote financial awareness"], targets: ["Reduce poverty", "Build social protection", "Improve access to resources"] },
-  4: { actions: ["Create peer-learning programs", "Develop educational resources", "Support digital literacy", "Mentor younger students"], targets: ["Quality learning", "Equal educational opportunity", "Lifelong learning"] },
-  6: { actions: ["Organize water awareness campaigns", "Report water leakage", "Promote rainwater harvesting", "Reduce water wastage"], targets: ["Safe water access", "Water efficiency", "Sustainable water management"] },
-  11: { actions: ["Report local civic issues", "Support clean public spaces", "Promote sustainable mobility", "Participate in community planning"], targets: ["Inclusive communities", "Safe public spaces", "Sustainable urban development"] },
-  12: { actions: ["Run waste segregation campaigns", "Reduce single-use products", "Promote reuse and repair", "Track campus waste"], targets: ["Waste reduction", "Resource efficiency", "Responsible consumption"] },
-  13: { actions: ["Organize climate awareness programs", "Measure carbon-conscious actions", "Promote public transport", "Plant and protect trees"], targets: ["Climate awareness", "Climate resilience", "Low-carbon actions"] },
-  15: { actions: ["Plant native trees", "Create biodiversity records", "Protect local habitats", "Organize biodiversity awareness drives"], targets: ["Forest protection", "Biodiversity conservation", "Land restoration"] },
-  17: { actions: ["Connect student organizations", "Collaborate with local communities", "Create cross-campus projects", "Share knowledge and resources"], targets: ["Multi-stakeholder partnerships", "Knowledge sharing", "Collaborative action"] },
+const sdgDetails: Record<number, { actions: string[] }> = {
+  1: { actions: ["Support local community initiatives", "Create skill development opportunities", "Promote financial awareness"] },
+  4: { actions: ["Create peer-learning programs", "Develop educational resources", "Support digital literacy", "Mentor younger students"] },
+  6: { actions: ["Organize water awareness campaigns", "Report water leakage", "Promote rainwater harvesting", "Reduce water wastage"] },
+  11: { actions: ["Report local civic issues", "Support clean public spaces", "Promote sustainable mobility", "Participate in community planning"] },
+  12: { actions: ["Run waste segregation campaigns", "Reduce single-use products", "Promote reuse and repair", "Track campus waste"] },
+  13: { actions: ["Organize climate awareness programs", "Measure carbon-conscious actions", "Promote public transport", "Plant and protect trees"] },
+  15: { actions: ["Plant native trees", "Create biodiversity records", "Protect local habitats", "Organize biodiversity awareness drives"] },
+  17: { actions: ["Connect student organizations", "Collaborate with local communities", "Create cross-campus projects", "Share knowledge and resources"] },
 };
 
 async function main() {
@@ -38,11 +38,12 @@ async function main() {
           description: sdg.description ?? sdg.shortDescription,
           color: sdg.color ?? "#0f5132",
           actions: sdgDetails[sdg.id]?.actions ?? ["Learn about this goal", "Plan a local activity", "Share the results with your community"],
-          targets: sdgDetails[sdg.id]?.targets ?? ["Build awareness", "Support local action", "Measure progress"],
           number: sdg.id,
           isActive: true,
-          category: sdg.id <= 3 ? "People" : sdg.id <= 10 ? "Prosperity" : sdg.id <= 15 ? "Planet" : "Partnership",
+          category: sdg.category,
+          targetCount: sdg.targetCount,
         },
+        $unset: { targets: "" },
       },
       { upsert: true }
     );

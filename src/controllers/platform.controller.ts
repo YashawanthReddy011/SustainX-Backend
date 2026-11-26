@@ -5,6 +5,11 @@ import { verifyActivity, rejectActivity } from "../services/impact.service";
 import { getRecentAdminActions, recordAdminAction } from "../services/adminAudit.service";
 import { activeChallengeFilter, publishedProjectFilter } from "../services/impactMetrics.service";
 
+function normalizeCommunityReportStatus(status: unknown) {
+	const value = String(status ?? "SUBMITTED").toUpperCase();
+	return value === "REPORTED" ? "SUBMITTED" : value === "IN_PROGRESS" ? "INVESTIGATING" : value;
+}
+
 export async function publicSummary(_req: Request, res: Response) {
   const now = new Date();
   const projectFilter = publishedProjectFilter();
@@ -34,10 +39,12 @@ export async function publicSummary(_req: Request, res: Response) {
       { $match: { status: "VERIFIED", isDemo: { $ne: true } } },
       { $group: { _id: null, points: { $sum: { $ifNull: ["$points", 0] } } } },
     ]).toArray(),
-    (await getCollection("Project")).aggregate<any>([
-      { $match: projectFilter },
-      { $unwind: "$memberIds" },
-      { $group: { _id: "$memberIds" } },
+    (await getCollection("ProjectMembership")).aggregate<any>([
+      { $match: { status: "APPROVED" } },
+      { $lookup: { from: "Project", localField: "projectId", foreignField: "_id", as: "project" } },
+      { $unwind: "$project" },
+      { $match: { "project.status": { $in: ["PUBLISHED", "ACTIVE", "COMPLETED"] }, "project.visibility": { $ne: "PRIVATE" }, "project.isPublished": { $ne: false }, "project.deletedAt": { $exists: false }, "project.isDeleted": { $ne: true }, "project.isDemo": { $ne: true } } },
+      { $group: { _id: "$userId" } },
       { $lookup: {
         from: "User",
         let: { userId: "$_id" },
@@ -108,7 +115,10 @@ export async function dashboard(req: Request, res: Response) {
     (await getCollection("Activity")).find({ userId }).sort({ createdAt: -1 }).toArray(),
     (await getCollection("Notification")).find({ userId }).sort({ createdAt: -1 }).limit(8).toArray(),
     (await getCollection("Certificate")).countDocuments({ userId, status: { $ne: "REVOKED" } }),
-    (await getCollection("Project")).find({ $or: [{ ownerId: userId }, { memberIds: userId }] }).sort({ updatedAt: -1, createdAt: -1 }).toArray(),
+    (async () => {
+      const projectIds = await (await getCollection("ProjectMembership")).distinct("projectId", { userId, status: { $in: ["PENDING", "APPROVED"] } });
+      return (await getCollection("Project")).find({ $or: [{ ownerId: userId }, { memberIds: userId }, { _id: { $in: projectIds } }] }).sort({ updatedAt: -1, createdAt: -1 }).toArray();
+    })(),
     (await getCollection("Challenge")).find({ joinedUserIds: userId }).sort({ createdAt: -1 }).toArray(),
     (await getCollection("CommunityReport")).find({ createdBy: userId }).sort({ createdAt: -1 }).toArray(),
     (await getCollection("environmentalActivities")).find({ userId }).sort({ verifiedAt: -1 }).toArray(),
@@ -140,10 +150,12 @@ export async function dashboard(req: Request, res: Response) {
     const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
     environmentalMonthly.set(key, (environmentalMonthly.get(key) ?? 0) + 1);
   }
-  const reportStatuses = ["REPORTED", "UNDER_REVIEW", "IN_PROGRESS", "RESOLVED"].map((status) => ({
-    status,
-    count: userReports.filter((report) => report.status === status).length,
-  }));
+  const userReportCounts = new Map<string, number>();
+  for (const report of userReports) {
+    const status = normalizeCommunityReportStatus(report.status);
+    userReportCounts.set(status, (userReportCounts.get(status) ?? 0) + 1);
+  }
+  const reportStatuses = ["SUBMITTED", "UNDER_REVIEW", "INVESTIGATING", "RESOLVED", "REJECTED"].map((status) => ({ status, count: userReportCounts.get(status) ?? 0 }));
   const reportMonthly = new Map<string, number>();
   for (const report of userReports) {
     const date = new Date(report.createdAt);
@@ -173,7 +185,7 @@ export async function dashboard(req: Request, res: Response) {
       sdgsImpacted: bySdg.size,
       environmentalSubmissions: environmentalRecords.length,
       reportsSubmitted: userReports.length,
-      reportsResolved: userReports.filter((report) => report.status === "RESOLVED").length,
+      reportsResolved: userReports.filter((report) => normalizeCommunityReportStatus(report.status) === "RESOLVED").length,
       discussionGroups,
     },
     activities: activities.map(toApiDocument),
@@ -200,7 +212,7 @@ export async function dashboard(req: Request, res: Response) {
     communityAnalytics: {
       reportsByStatus: reportStatuses,
       monthlyReports: monthKeys.map(({ key, month }) => ({ month, reports: reportMonthly.get(key) ?? 0 })),
-      recentReports: userReports.slice(0, 6).map((report) => ({ id: String(report._id), title: report.title, status: report.status, createdAt: report.createdAt })),
+      recentReports: userReports.slice(0, 6).map((report) => ({ id: String(report._id), title: report.title, status: normalizeCommunityReportStatus(report.status), createdAt: report.createdAt })),
     },
     leaderboard: {
       userRank: usersAbove + 1,
@@ -293,7 +305,18 @@ export async function adminOverview(_req: Request, res: Response) {
   const sdgCounts = new Map<number, number>(activity.sdgs.map((row: any) => [Number(row._id), Number(row.count)] as [number, number]));
   const projectCounts = new Map<string, number>(projectSummary.statuses.map((row: any) => [String(row._id), Number(row.count)] as [string, number]));
   const projectStatuses = ["ACTIVE", "COMPLETED", "ARCHIVED"].map((status) => ({ status, count: projectCounts.get(status) ?? 0 }));
-  const reportStatuses = ["REPORTED", "UNDER_REVIEW", "IN_PROGRESS", "RESOLVED"].map((status) => ({ status, count: reportCounts.get(status) ?? 0 }));
+  const submittedReports = (reportCounts.get("SUBMITTED") ?? 0) + (reportCounts.get("REPORTED") ?? 0);
+  const underReviewReports = reportCounts.get("UNDER_REVIEW") ?? 0;
+  const investigatingReports = (reportCounts.get("INVESTIGATING") ?? 0) + (reportCounts.get("IN_PROGRESS") ?? 0);
+  const resolvedReports = reportCounts.get("RESOLVED") ?? 0;
+  const rejectedReports = reportCounts.get("REJECTED") ?? 0;
+  const reportStatuses = [
+    { status: "SUBMITTED", count: submittedReports },
+    { status: "UNDER_REVIEW", count: underReviewReports },
+    { status: "INVESTIGATING", count: investigatingReports },
+    { status: "RESOLVED", count: resolvedReports },
+    { status: "REJECTED", count: rejectedReports },
+  ];
   const typeTotals = new Map<string, { quantity: number; count: number }>(environmental.types.map((row: any) => [String(row._id), { quantity: Number(row.quantity), count: Number(row.count) }] as [string, { quantity: number; count: number }]));
   const getEcoTotal = (type: string) => typeTotals.get(type)?.quantity ?? 0;
   const ecoSdgNumbers = environmental.sdgs.map((row: any) => Number(row._id));
@@ -307,9 +330,9 @@ export async function adminOverview(_req: Request, res: Response) {
       pendingActivities: Number(activityTotals.pending), verifiedActivities: Number(activityTotals.verified), rejectedActivities: Number(activityTotals.rejected),
       totalPoints: Number(activityTotals.points), certificates: certificateCount, sdgsCovered, projects: projectTotal,
       participants: Number(projectSummary.participants[0]?.count ?? 0),
-      reports: Array.from(reportCounts.values()).reduce((sum, count) => sum + count, 0), pendingReports: reportCounts.get("REPORTED") ?? 0,
-      reportsUnderReview: (reportCounts.get("UNDER_REVIEW") ?? 0) + (reportCounts.get("IN_PROGRESS") ?? 0),
-      resolvedReports: reportCounts.get("RESOLVED") ?? 0, environmentalSubmissions,
+      reports: submittedReports + underReviewReports + investigatingReports + resolvedReports + rejectedReports, pendingReports: submittedReports,
+      reportsUnderReview: underReviewReports + investigatingReports,
+      resolvedReports, environmentalSubmissions,
     },
     activityGrowth: monthKeys.map(({ key, month }) => ({ month, activities: activityGrowth.get(key) ?? 0, verifiedActivities: verifiedGrowth.get(key) ?? 0, users: userGrowth.get(key) ?? 0 })),
     sdgImpact: sdgs.map((sdg) => ({ name: `SDG ${sdg._id}`, value: sdgCounts.get(Number(sdg._id)) ?? 0 })),

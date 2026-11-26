@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import {
   getSdg,
+  getSdgStats,
   listSdgs,
   updateSdg,
 } from "../controllers/sdg.controller";
@@ -13,6 +14,7 @@ import { sdgProgress } from "../controllers/apiV1.controller";
 const router = Router();
 
 router.get("/", listSdgs);
+router.get("/stats", getSdgStats);
 
 router.get("/:id/progress", sdgProgress);
 router.get("/:id", getSdg);

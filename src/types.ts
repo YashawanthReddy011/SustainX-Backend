@@ -15,4 +15,6 @@ export interface SDG {
   shortDescription: string;
   description?: string;
   color?: string;
+  category: "People" | "Prosperity" | "Planet" | "Peace" | "Partnership";
+  targetCount: number;
 }

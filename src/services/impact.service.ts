@@ -50,6 +50,18 @@ export async function verifyActivity(
       );
       if (userUpdate.matchedCount === 0) throw new Error("Activity user not found");
 
+      if (current.challengeId) {
+				const challenge = await (await getCollection("Challenge")).findOne({ _id: current.challengeId }, { session });
+				const verifiedSubmissions = await activities.countDocuments({ userId: current.userId, challengeId: current.challengeId, status: "VERIFIED", isDemo: { $ne: true } }, { session });
+				const requiredSubmissions = Math.max(1, Number(challenge?.requiredSubmissions ?? 1));
+				const progress = Math.min(100, Math.round((verifiedSubmissions / requiredSubmissions) * 100));
+				await (await getCollection("ChallengeParticipation")).updateOne(
+					{ challengeId: current.challengeId, userId: current.userId },
+					{ $set: { status: progress >= 100 ? "COMPLETED" : "IN_PROGRESS", progress, updatedAt: now, ...(progress >= 100 ? { completedAt: now } : {}) } },
+					{ session },
+				);
+			}
+
       const certificates = await getCollection("Certificate");
       const existingCertificate = await certificates.findOne({ activityId }, { session });
       if (!existingCertificate) {

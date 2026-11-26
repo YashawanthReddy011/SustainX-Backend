@@ -16,19 +16,46 @@ export async function ensureDatabaseIndexes() {
 		getCollection("Challenge").then((collection) => Promise.all([
 			collection.createIndex({ status: 1, createdAt: -1 }, { name: "challenge_status_created" }),
 			collection.createIndex({ sdgId: 1, status: 1, createdAt: -1 }, { name: "challenge_sdg_status" }),
+			collection.createIndex({ sdgNumbers: 1, status: 1, createdAt: -1 }, { name: "challenge_sdgs_status" }),
+			collection.createIndex({ status: 1, startDate: 1, endDate: 1 }, { name: "challenge_schedule_status" }),
+			collection.createIndex({ participants: -1, createdAt: -1 }, { name: "challenge_popularity" }),
 			collection.createIndex({ joinedUserIds: 1 }, { name: "challenge_members" }),
 			collection.createIndex({ joinedUserIds: 1, createdAt: -1 }, { name: "challenge_member_created" }),
 		])),
+		getCollection("ChallengeParticipation").then((collection) => Promise.all([
+			collection.createIndex({ challengeId: 1, userId: 1 }, { unique: true, name: "challenge_participation_unique" }),
+			collection.createIndex({ userId: 1, status: 1, joinedAt: -1 }, { name: "challenge_participation_user_status" }),
+			collection.createIndex({ challengeId: 1, status: 1, joinedAt: -1 }, { name: "challenge_participation_challenge_status" }),
+		])),
 		getCollection("Project").then((collection) => Promise.all([
-			collection.createIndex({ status: 1, createdAt: -1 }, { name: "project_status_created" }),
+			collection.createIndex({ status: 1, visibility: 1, createdAt: -1 }, { name: "project_status_visibility_created" }),
 			collection.createIndex({ sdgNumbers: 1, status: 1, createdAt: -1 }, { name: "project_sdgs_status" }),
 			collection.createIndex({ ownerId: 1, createdAt: -1 }, { name: "project_owner_created" }),
 			collection.createIndex({ memberIds: 1 }, { name: "project_members" }),
+			collection.createIndex({ participantCount: -1, createdAt: -1 }, { name: "project_popularity" }),
+			collection.createIndex({ slug: 1 }, { unique: true, name: "project_slug_unique", partialFilterExpression: { slug: { $type: "string" } } }),
+		])),
+		getCollection("ProjectMembership").then((collection) => Promise.all([
+			collection.createIndex({ projectId: 1, userId: 1 }, { unique: true, name: "project_membership_unique" }),
+			collection.createIndex({ userId: 1, status: 1, updatedAt: -1 }, { name: "project_membership_user_status" }),
+			collection.createIndex({ projectId: 1, status: 1, createdAt: 1 }, { name: "project_membership_project_status" }),
+		])),
+		getCollection("ProjectMilestone").then((collection) => Promise.all([
+			collection.createIndex({ projectId: 1, status: 1, dueDate: 1 }, { name: "project_milestone_project_status" }),
+		])),
+		getCollection("ProjectDiscussion").then((collection) => Promise.all([
+			collection.createIndex({ projectId: 1, createdAt: -1 }, { name: "project_discussion_timeline" }),
+		])),
+		getCollection("ProjectEvidence").then((collection) => Promise.all([
+			collection.createIndex({ projectId: 1, status: 1, createdAt: -1 }, { name: "project_evidence_review" }),
+			collection.createIndex({ status: 1, createdAt: 1 }, { name: "project_evidence_pending" }),
 		])),
 		getCollection("CommunityReport").then((collection) => Promise.all([
 			collection.createIndex({ status: 1, createdAt: -1 }, { name: "report_status_created" }),
 			collection.createIndex({ category: 1, status: 1, createdAt: -1 }, { name: "report_category_status" }),
 			collection.createIndex({ createdBy: 1, createdAt: -1 }, { name: "report_owner_created" }),
+			collection.createIndex({ geoPoint: "2dsphere" }, { name: "report_location_2dsphere" }),
+			collection.createIndex({ sdgNumbers: 1, status: 1, createdAt: -1 }, { name: "report_sdgs_status" }),
 		])),
 		getCollection("Notification").then((collection) => collection.createIndex({ userId: 1, createdAt: -1 }, { name: "notification_user_created" })),
 		getCollection("Certificate").then((collection) => collection.createIndex({ userId: 1, issuedAt: -1 }, { name: "certificate_user_issued" })),

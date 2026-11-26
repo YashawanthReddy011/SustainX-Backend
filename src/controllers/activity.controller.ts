@@ -99,6 +99,13 @@ export async function createActivity(
   if (challengeId && !(await (await getCollection("Challenge")).findOne({ _id: challengeId }))) {
     return res.status(400).json({ error: "Challenge not found" });
   }
+  if (challengeId) {
+    const challenge = await (await getCollection("Challenge")).findOne({ _id: challengeId });
+    const participation = await (await getCollection("ChallengeParticipation")).findOne({ challengeId, userId: req.user!.id, status: { $ne: "WITHDRAWN" } });
+    const legacyJoined = Array.isArray(challenge?.joinedUserIds) && challenge.joinedUserIds.includes(req.user!.id);
+    if (!participation && !legacyJoined) return res.status(403).json({ error: "Join this challenge before submitting evidence." });
+    if (participation?.status === "COMPLETED") return res.status(409).json({ error: "This challenge is already complete for your account." });
+  }
 
   const activity = {
     _id: randomUUID(),
@@ -121,6 +128,17 @@ export async function createActivity(
     reviewNote: null,
   };
   await (await getCollection("Activity")).insertOne(activity);
+
+  if (challengeId) {
+    await (await getCollection("ChallengeParticipation")).updateOne(
+      { challengeId, userId: req.user!.id },
+      {
+        $set: { status: "IN_PROGRESS", updatedAt: activity.createdAt },
+        $setOnInsert: { _id: randomUUID(), progress: 0, joinedAt: activity.createdAt, createdAt: activity.createdAt },
+      },
+      { upsert: true },
+    );
+  }
 
   res
     .status(201)

@@ -11,9 +11,10 @@ export async function listChallenges(req: Request, res: Response) {
     if (!["ACTIVE", "COMPLETED"].includes(req.query.status)) return res.status(400).json({ error: "status must be ACTIVE, COMPLETED, or ALL." });
     filter.status = req.query.status;
   }
-  if (typeof req.query.sdgId === "string") {
-    const sdgId = Number(req.query.sdgId);
-    if (!Number.isInteger(sdgId) || sdgId < 1 || sdgId > 17) return res.status(400).json({ error: "sdgId must be an integer between 1 and 17." });
+  const requestedSdg = req.query.sdg ?? req.query.sdgId;
+  if (typeof requestedSdg === "string") {
+    const sdgId = Number(requestedSdg);
+    if (!Number.isInteger(sdgId) || sdgId < 1 || sdgId > 17) return res.status(400).json({ error: "sdg must be an integer between 1 and 17." });
     filter.sdgId = sdgId;
   }
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
@@ -63,9 +64,10 @@ export async function listProjects(req: Request, res: Response) {
     if (!["ACTIVE", "COMPLETED"].includes(req.query.status)) return res.status(400).json({ error: "status must be ACTIVE, COMPLETED, or ALL." });
     filter.status = req.query.status;
   }
-  if (typeof req.query.sdgId === "string") {
-    const sdgId = Number(req.query.sdgId);
-    if (!Number.isInteger(sdgId) || sdgId < 1 || sdgId > 17) return res.status(400).json({ error: "sdgId must be an integer between 1 and 17." });
+  const requestedSdg = req.query.sdg ?? req.query.sdgId;
+  if (typeof requestedSdg === "string") {
+    const sdgId = Number(requestedSdg);
+    if (!Number.isInteger(sdgId) || sdgId < 1 || sdgId > 17) return res.status(400).json({ error: "sdg must be an integer between 1 and 17." });
     filter.$or = [{ sdgId }, { sdgNumbers: sdgId }];
   }
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";

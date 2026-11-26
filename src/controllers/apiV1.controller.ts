@@ -80,7 +80,7 @@ export async function markNotificationsRead(req: Request, res: Response) {
 export async function listEnvironmentalActivities(req: Request, res: Response) {
 	const filter: Record<string, unknown> = {};
 	if (typeof req.query.type === "string") {
-		const allowed = ["TREE_PLANTATION", "WATER_CONSERVATION", "WASTE_REDUCTION", "BIODIVERSITY"];
+		const allowed = ["TREE_PLANTATION", "TREE_SURVIVAL", "WATER_CONSERVATION", "RENEWABLE_ENERGY", "WASTE_REDUCTION", "CLIMATE_ACTION", "MARINE_PROTECTION", "BIODIVERSITY"];
 		if (!allowed.includes(req.query.type)) return res.status(400).json({ error: "type is not a supported EcoGuard activity." });
 		filter.type = req.query.type;
 	}
